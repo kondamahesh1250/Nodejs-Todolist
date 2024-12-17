@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .main {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            width: calc(100% - 20px);
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            color: #fff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        li span {
+            flex-grow: 1;
+            text-align: left;
+        }
+
+        li div {
+            display: flex;
+            gap: 10px;
+        }
+
+        li button {
+            padding: 5px 10px;
+            font-size: 14px;
+            background-color: #ff4d4d;
+            border-radius: 4px;
+        }
+
+        li button:hover {
+            background-color: #cc0000;
+        }
+
+        li button:first-child {
+            background-color: #ffc107;
+        }
+
+        li button:first-child:hover {
+            background-color: #e0a800;
+        }
+
+        @media (max-width: 500px) {
+            input[type="text"],
+            button {
+                font-size: 14px;
+            }
+
+            li {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            li div {
+                margin-top: 10px;
+                gap: 5px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main">
+        <h1>Todo List</h1>
+        <input type="text" name="info" id="info" placeholder="Add a new task">
+        <br>
+        <button id="btn">Add Task</button>
+        <ul id="result"></ul>
+    </div>
+
+    <script>
+        let descrip = document.getElementById("info");
+        let btn = document.getElementById("btn");
+        let result = document.getElementById("result");
+
+        let counterid = 1; // Default value, updated on page load
+
+        // Fetch the next available ID on page load
+        async function initializeCounterId() {
+            try {
+                const response = await fetch("http://localhost:3003/nextid");
+                const data = await response.json();
+                counterid = data.nextId || 1; // Fallback to 1 if no data is available
+            } catch (error) {
+                console.error("Failed to fetch the next ID:", error);
+            }
+        }
+
+        // Call this function before any tasks are added
+        initializeCounterId();
+
+        // Initially load the data from the database
+        async function loaddata() {
+            let response = await fetch("http://localhost:3003/loaddata");
+            let data = await response.json();
+
+            result.innerHTML = ""; // Clear the existing list
+
+            if (data) {
+                data.forEach(i => {
+                    let info = document.createElement("li");
+                    info.setAttribute('data-id', i.id);
+                    info.innerHTML = `
+                        <span>${i["tdescription"]}</span>
+                        <div>
+                            <button onclick="editbtn(${i["id"]})">Edit</button>
+                            <button onclick="removebtn(${i["id"]})">Delete</button>
+                        </div>
+                    `;
+                    result.appendChild(info);
+                });
+            } else {
+                result.innerHTML = "No data present";
+            }
+        }
+
+        loaddata();
+
+        // Add task event listener
+        btn.addEventListener("click", () => {
+            const tdescription = descrip.value.trim();
+            if (tdescription) {
+                addTask(tdescription);
+                descrip.value = "";
+            } else {
+                alert("Please enter a task");
+            }
+        });
+
+        // Function to add task
+        function addTask(tdescription) {
+            const id = counterid++;
+            const list = {
+                id: id,
+                tdescription: tdescription
+            };
+
+            // Add to the UI immediately
+            const li = document.createElement("li");
+            li.setAttribute('data-id', id);
+            li.innerHTML = `
+                <span>${tdescription}</span>
+                <div>
+                    <button onclick="editbtn(${id})">Edit</button>
+                    <button onclick="removebtn(${id})">Delete</button>
+                </div>
+            `;
+            result.appendChild(li);
+
+            insertdata(list);
+        }
+
+        // Function to insert data into the database
+        async function insertdata(list) {
+            let response = await fetch("http://localhost:3003/insertdata", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(list)
+            });
+
+            let data = await response.json();
+            if (data.success) {
+                console.log("Task inserted successfully!");
+            } else {
+                alert("Failed to insert task.");
+            }
+        }
+
+        // Editing the description
+        window.editbtn = async (id) => {
+            let newdesc = prompt("Edit the description");
+            if (!newdesc) return; // Exit if no new description is provided
+
+            let obj = {
+                id: id,
+                tdescription: newdesc,
+            };
+
+            let response = await fetch("http://localhost:3003/editdata", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(obj),
+            });
+
+            let data = await response.json();
+
+            if (data.success) {
+                // Update only the edited task in the UI (no need to reload everything)
+                const taskElement = document.querySelector(`li[data-id="${id}"]`);
+                if (taskElement) {
+                    taskElement.querySelector('span').textContent = newdesc; // Update the task text
+                }
+            } else {
+                alert("Failed to update the task.");
+            }
+        };
+
+        // Removing task
+        window.removebtn = async (id) => {
+            let response = await fetch(`http://localhost:3003/deletedata/${id}`, {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json",
+                }
+            });
+
+            let data = await response.json();
+
+            if (data.success) {
+                // Remove the task from the UI immediately without reloading everything
+                const taskElement = document.querySelector(`li[data-id="${id}"]`);
+                if (taskElement) {
+                    taskElement.remove(); // Remove the task element from the DOM
+                }
+                alert("Task deleted successfully.");
+            } else {
+                alert("Failed to delete the task.");
+            }
+        };
+    </script>
+</body>
+
+</html>
